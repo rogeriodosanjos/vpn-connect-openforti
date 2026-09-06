@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+.env
+
+# PyInstaller: artefatos gerados
+build/
+dist/
+
+# Arquivo .spec gerado automaticamente pelo PyInstaller.
+# A especificação mantida deliberadamente fica em packaging/.
+*.spec
+!packaging/*.spec
+
+# Estado local, logs e dados potencialmente sensíveis
+*.log
+*.pid
+profiles.json
+openfortivpn-gui-trusted-cert-*
+
+# IDE e sistema operacional
+.vscode/
+.idea/
+.DS_Store

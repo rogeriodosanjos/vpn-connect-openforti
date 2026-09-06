@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=VPN Connect
+Comment=Conectar/desconectar VPN via openfortivpn
+Exec=@HOME@/.local/bin/openfortivpn-gui
+Icon=network-vpn
+Terminal=false
+Categories=Network;
+StartupWMClass=openfortivpn-gui
