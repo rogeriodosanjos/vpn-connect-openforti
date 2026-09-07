@@ -100,8 +100,35 @@ gráfico.
 3. Informe o usuário da VPN.
 4. Clique em **Conectar**.
 5. Quando solicitado, informe a senha e o token de autenticação multifator.
-6. Na primeira conexão, confira cuidadosamente a impressão digital do
-   certificado apresentada pelo servidor antes de aceitá-la.
+
+### Primeira conexão e certificado confiável
+
+Na primeira conexão de cada perfil, o aplicativo solicitará a senha da VPN
+**duas vezes**. Isso é esperado e acontece porque o `openfortivpn` realiza duas
+execuções:
+
+1. na primeira execução, ele acessa o gateway, encontra um certificado que
+   ainda não está na lista local de confiança, informa sua impressão digital
+   SHA-256 e encerra a tentativa;
+2. o aplicativo identifica essa impressão digital, salva o valor no cache e
+   executa o `openfortivpn` novamente com a opção `--trusted-cert`. Como é um
+   novo processo de autenticação, a senha precisa ser informada outra vez.
+
+O certificado fica armazenado por perfil em:
+
+```text
+~/.cache/openfortivpn-gui-trusted-cert-<nome_do_perfil>
+```
+
+Nas conexões seguintes, o valor é lido do cache e normalmente a senha será
+solicitada apenas uma vez. O processo de duas solicitações ocorrerá novamente
+se o arquivo de cache for removido ou se o certificado do gateway for renovado
+ou substituído.
+
+> **Segurança:** antes da primeira conexão, confirme com a organização
+> responsável pela VPN se a impressão digital SHA-256 apresentada nos logs é a
+> esperada. O aplicativo salva automaticamente essa impressão digital para
+> conseguir realizar a segunda tentativa.
 
 O aplicativo salva perfis localmente, permitindo alternar entre combinações de
 endpoint e usuário. Para salvar um perfil, informe os dados, escolha um nome e

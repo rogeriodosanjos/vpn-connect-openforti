@@ -51,7 +51,10 @@ TOKEN_PROMPT_RE = re.compile(
     re.IGNORECASE,
 )
 TUNNEL_UP_RE = re.compile(r"Tunnel is up and running")
-CERT_DIGEST_RE = re.compile(r"--trusted-cert\s+([0-9a-f]{64})")
+CERT_DIGEST_RE = re.compile(
+    r"(?:--trusted-cert|trusted-cert\s*=)\s*([0-9a-f]{64})",
+    re.IGNORECASE,
+)
 
 
 def _slug(name):
@@ -60,6 +63,12 @@ def _slug(name):
 
 def trusted_cert_file_for(profile_name):
     return CACHE_DIR / f"openfortivpn-gui-trusted-cert-{_slug(profile_name)}"
+
+
+def extract_cert_digest(output):
+    """Retorna o último SHA-256 de certificado sugerido pelo openfortivpn."""
+    matches = CERT_DIGEST_RE.findall(output or "")
+    return matches[-1].lower() if matches else None
 
 
 class ProfileStore:
@@ -512,6 +521,28 @@ class VpnGui:
         return args
 
     def _spawn_and_connect(self, bin_path, log_file):
+        # A primeira execução pode terminar de propósito: openfortivpn imprime o
+        # SHA-256 do certificado desconhecido e pede uma nova execução com
+        # --trusted-cert. Nesse caso persistimos o hash e tentamos uma vez mais.
+        for attempt in range(2):
+            connected, new_digest = self._spawn_once(bin_path, log_file)
+            if connected:
+                return True
+
+            if attempt == 0 and new_digest:
+                self.trusted_cert_file.parent.mkdir(parents=True, exist_ok=True)
+                self.trusted_cert_file.write_text(new_digest + "\n")
+                self._append_log(
+                    "Certificado do gateway salvo em "
+                    f"{self.trusted_cert_file}. Tentando novamente..."
+                )
+                continue
+
+            return False
+
+        return False
+
+    def _spawn_once(self, bin_path, log_file):
         args = self._build_args()
         sudo_args = ["-n", bin_path, *args]
 
@@ -532,10 +563,11 @@ class VpnGui:
                 child.logfile_read = fh
             except Exception as exc:  # noqa: BLE001
                 self._append_log(f"ERRO ao iniciar processo: {exc}")
-                return False
+                return False, None
 
             self.child = child
             connected = False
+            new_digest = None
             try:
                 while True:
                     index = child.expect(
@@ -550,6 +582,7 @@ class VpnGui:
                     )
 
                     chunk = child.before or ""
+                    new_digest = extract_cert_digest(chunk) or new_digest
                     for line in chunk.splitlines():
                         if line.strip():
                             self._append_log(line.rstrip())
@@ -560,7 +593,7 @@ class VpnGui:
                         if pwd is None:
                             child.terminate(force=True)
                             self._append_log("Conexão cancelada pelo usuário.")
-                            return False
+                            return False, None
                         child.sendline(pwd)
 
                     elif index == 1:
@@ -570,7 +603,7 @@ class VpnGui:
                         if token is None:
                             child.terminate(force=True)
                             self._append_log("Conexão cancelada pelo usuário.")
-                            return False
+                            return False, None
                         child.sendline(token)
 
                     elif index == 2:
@@ -610,7 +643,7 @@ class VpnGui:
                         pass
                     self.child = None
 
-            return connected
+            return connected, new_digest
 
     def _find_and_store_pid(self, pid):
         """Armazena o PID do processo criado pelo pexpect/sudo."""
